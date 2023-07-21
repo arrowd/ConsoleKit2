@@ -1167,7 +1167,7 @@ ck_seat_get_property (GObject    *object,
                 g_value_set_string (value, self->priv->id);
                 break;
         case PROP_KIND:
-                g_value_set_string (value, self->priv->id);
+                g_value_set_enum (value, self->priv->kind);
                 break;
         case PROP_CONNECTION:
                 g_value_set_pointer (value, self->priv->connection);
