@@ -1,0 +1,635 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<node name="/org/freedesktop/login1/Manager"
+  xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd"
+>
+
+  <interface name="org.freedesktop.login1.Manager">
+    <method name="GetSession">
+      <arg name="session_id" direction="in" type="s">
+        <doc:doc>
+          <doc:summary>The session's ID</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="session_path" direction="out" type="o">
+        <doc:doc>
+          <doc:summary>The object identifier for the requested session</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Returns the session path that is associated with the specified session ID.
+          </doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_GENERAL</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="GetSessionByPID">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <arg name="pid" direction="in" type="u">
+        <doc:doc>
+          <doc:summary>The POSIX process ID</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="ssid" direction="out" type="o">
+        <doc:doc>
+          <doc:summary>The object identifier for the current session</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Attempts to determine the session ID for the specified
+          POSIX process ID (pid).
+          </doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_GENERAL</doc:para>
+          <doc:para>Since 1.1.1</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="GetUser">
+      <arg name="uid" type="u" direction="in"/>
+      <arg name="object_path" type="o" direction="out"/>
+    </method>
+
+    <method name="GetUserByPID">
+      <arg name="uid" type="u" direction="in"/>
+      <arg name="object_path" type="o" direction="out"/>
+    </method>
+
+    <method name="GetSeat">
+      <arg name="seat_id" type="s" direction="in"/>
+      <arg name="object_path" type="o" direction="out"/>
+    </method>
+
+    <method name="ListSessions">
+      <arg name="sessions" direction="out" type="a(susso)">
+        <doc:doc>
+          <doc:summary>an array of structures (session ID, user ID, user name, seat ID, session path)</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Retrieves a list of all <doc:ref type="interface" to="Session">Sessions</doc:ref>
+          that are present on the system.</doc:para>
+        </doc:description>
+        <doc:seealso><doc:ref type="method" to="Manager.GetSeats">GetSeats()</doc:ref></doc:seealso>
+      </doc:doc>
+    </method>
+
+    <method name="ListSessionsEx">
+      <arg name="sessions" direction="out" type="a(sussussbto)">
+        <doc:doc>
+          <doc:summary>an array of structures (session ID, user ID, user name, seat ID, leader PID, session class, tty name, idle hint, idle hint monotonic timestamp, session path)</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Retrieves a list of all <doc:ref type="interface" to="Session">Sessions</doc:ref>
+          that are present on the system.</doc:para>
+        </doc:description>
+        <doc:seealso><doc:ref type="method" to="Manager.GetSeats">GetSeats()</doc:ref></doc:seealso>
+      </doc:doc>
+    </method>
+
+    <method name="ListUsers">
+      <arg name="users" type="a(uso)" direction="out"/>
+    </method>
+
+    <method name="ListSeats">
+      <arg name="seats" direction="out" type="a(so)">
+        <doc:doc>
+          <doc:summary>an array of seat names and IDs</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Retrieves a list of all <doc:ref type="interface" to="Seat">Seats</doc:ref>
+          that are present on the system.</doc:para>
+          <doc:para>Like the logind method of the same name, this returns both the seat's name
+          (such as "seat0") and the D-Bus object path for the seat object that implements the
+          <doc:ref type="interface" to="Seat">Seat</doc:ref> interface.</doc:para>
+        </doc:description>
+        <doc:seealso><doc:ref type="method" to="Manager.GetSeats">GetSeats()</doc:ref></doc:seealso>
+      </doc:doc>
+    </method>
+
+    <method name="ListInhibitors">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <annotation name="org.gtk.GDBus.Since" value="0.9.5"/>
+      <arg name="inhibitors" type="a(ssssuu)" direction="out"/>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method emulates the logind implementation.</doc:para>
+          <doc:para>Returns the current list of inhibitors, an array of strings representing the what, who, why, mode, and two unsigned int32 representing the user ID and process ID.</doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_GENERAL or CK_MANAGER_ERROR_NOTHING_INHIBITED.</doc:para>
+          <doc:para>Since 0.9.5</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="Restart">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method initiates a request to restart (ie. reboot) the computer system.</doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_INHIBITED, CK_MANAGER_ERROR_INSUFFICIENT_PERMISSION, CK_MANAGER_ERROR_AUTHORIZATION_REQUIRED,
+          CK_MANAGER_ERROR_GENERAL, CK_MANAGER_ERROR_BUSY</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="CanRestart">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <arg name="can_restart" type="b" direction="out"/>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method returns whether the user is authorized to restart the computer system.</doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_FAILED if polkit is used and fails checking authorization.</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="Halt">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method initiates a request to stop (ie. shutdown) the computer system.</doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_INHIBITED, CK_MANAGER_ERROR_INSUFFICIENT_PERMISSION, CK_MANAGER_ERROR_AUTHORIZATION_REQUIRED,
+          CK_MANAGER_ERROR_GENERAL, CK_MANAGER_ERROR_BUSY</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="CanHalt">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <arg name="can_halt" type="b" direction="out"/>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method returns whether the user is authorized to shutdown the computer system.</doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_FAILED if polkit is used and fails checking authorization.</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="Reboot">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <annotation name="org.gtk.GDBus.Since" value="0.9.2"/>
+      <arg name="policykit_interactivity" type="b" direction="in">
+        <doc:doc>
+          <doc:summary>policykit_interactivity determines whether PolicyKit (if enabled) should interactively ask the user for authentication credentials if it needs to.</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method emulates the logind implementation. This method initiates a request to reboot the computer system.
+          </doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_INHIBITED, CK_MANAGER_ERROR_INSUFFICIENT_PERMISSION, CK_MANAGER_ERROR_AUTHORIZATION_REQUIRED,
+          CK_MANAGER_ERROR_GENERAL, CK_MANAGER_ERROR_BUSY</doc:para>
+          <doc:para>Since 0.9.2</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="CanReboot">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <annotation name="org.gtk.GDBus.Since" value="0.9.2"/>
+      <arg name="can_reboot" type="s" direction="out"/>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method emulates the logind implementation.</doc:para>
+          <doc:para>Returns whether the system supports rebooting and whether the calling user is eligible to reboot the system.</doc:para>
+          <doc:para>Returns one of "na", "yes", "no" or "challenge".</doc:para>
+          <doc:para>If "na" is returned rebooting is not available because of hardware support.</doc:para>
+          <doc:para>If "yes" is returned rebooting is supported and the user may suspend without further authentication.</doc:para>
+          <doc:para>If "no" is returned rebooting is available but the user is not allowed to reboot.</doc:para>
+          <doc:para>If "challenge" is returned rebooting is available, but only after authorization.</doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_FAILED if polkit is used and fails checking authorization.</doc:para>
+          <doc:para>Since 0.9.2</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="PowerOff">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <annotation name="org.gtk.GDBus.Since" value="0.9.2"/>
+      <arg name="policykit_interactivity" type="b" direction="in">
+        <doc:doc>
+          <doc:summary>policykit_interactivity determines whether PolicyKit (if enabled) should interactively ask the user for authentication credentials if it needs to.</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method initiates a request to shutdown the computer system.</doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_INHIBITED, CK_MANAGER_ERROR_INSUFFICIENT_PERMISSION, CK_MANAGER_ERROR_AUTHORIZATION_REQUIRED,
+          CK_MANAGER_ERROR_GENERAL, CK_MANAGER_ERROR_BUSY</doc:para>
+          <doc:para>Since 0.9.2</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="CanPowerOff">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <annotation name="org.gtk.GDBus.Since" value="0.9.2"/>
+      <arg name="can_poweroff" type="s" direction="out"/>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method emulates the logind implementation.</doc:para>
+          <doc:para>Returns whether the system supports shutdown and whether the calling user is eligible to shutdown the system.</doc:para>
+          <doc:para>Returns one of "na", "yes", "no" or "challenge".</doc:para>
+          <doc:para>If "na" is returned shutdown is not available because of hardware support.</doc:para>
+          <doc:para>If "yes" is returned shutdown is supported and the user may hibernate without further authentication.</doc:para>
+          <doc:para>If "no" is returned shutdown is available but the user is not allowed to shutdown.</doc:para>
+          <doc:para>If "challenge" is returned shutdown is available, but only after authorization.</doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_FAILED if polkit is used and fails checking authorization.</doc:para>
+          <doc:para>Since 0.9.2</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="Suspend">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <annotation name="org.gtk.GDBus.Since" value="0.9.2"/>
+      <arg name="policykit_interactivity" type="b" direction="in">
+        <doc:doc>
+          <doc:summary>policykit_interactivity determines whether PolicyKit (if enabled) should interactively ask the user for authentication credentials if it needs to.</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method initiates a request to suspend the computer system.</doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_INHIBITED, CK_MANAGER_ERROR_INSUFFICIENT_PERMISSION, CK_MANAGER_ERROR_AUTHORIZATION_REQUIRED,
+          CK_MANAGER_ERROR_GENERAL, CK_MANAGER_ERROR_BUSY</doc:para>
+          <doc:para>Since 0.9.2</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="CanSuspend">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <annotation name="org.gtk.GDBus.Since" value="0.9.1"/>
+      <arg name="can_suspend" type="s" direction="out"/>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method emulates the logind implementation.</doc:para>
+          <doc:para>Returns whether the system supports suspending and whether the calling user is eligible to hibernate the system.</doc:para>
+          <doc:para>Returns one of "na", "yes", "no" or "challenge".</doc:para>
+          <doc:para>If "na" is returned suspending is not available because of hardware support.</doc:para>
+          <doc:para>If "yes" is returned suspending is supported and the user may suspend without further authentication.</doc:para>
+          <doc:para>If "no" is returned suspending is available but the user is not allowed to suspend.</doc:para>
+          <doc:para>If "challenge" is returned suspending is available, but only after authorization.</doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_FAILED if polkit is used and fails checking authorization.</doc:para>
+          <doc:para>Since 0.9.1</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="Hibernate">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <annotation name="org.gtk.GDBus.Since" value="0.9.2"/>
+      <arg name="policykit_interactivity" type="b" direction="in">
+        <doc:doc>
+          <doc:summary>policykit_interactivity determines whether PolicyKit (if enabled) should interactively ask the user for authentication credentials if it needs to.</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method initiates a request to hibernate the computer system.</doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_INHIBITED, CK_MANAGER_ERROR_INSUFFICIENT_PERMISSION, CK_MANAGER_ERROR_AUTHORIZATION_REQUIRED,
+          CK_MANAGER_ERROR_GENERAL, CK_MANAGER_ERROR_BUSY</doc:para>
+          <doc:para>Since 0.9.2</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="CanHibernate">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <annotation name="org.gtk.GDBus.Since" value="0.9.1"/>
+      <arg name="can_hibernate" type="s" direction="out"/>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method emulates the logind implementation.</doc:para>
+          <doc:para>Returns whether the system supports hibernation and whether the calling user is eligible to hibernate the system.</doc:para>
+          <doc:para>Returns one of "na", "yes", "no" or "challenge".</doc:para>
+          <doc:para>If "na" is returned hibernation is not available because of hardware support.</doc:para>
+          <doc:para>If "yes" is returned hibernation is supported and the user may hibernate without further authentication.</doc:para>
+          <doc:para>If "no" is returned hibernation is available but the user is not allowed to hibernate.</doc:para>
+          <doc:para>If "challenge" is returned hibernation is available, but only after authorization.</doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_FAILED if polkit is used and fails checking authorization.</doc:para>
+          <doc:para>Since 0.9.1</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="HybridSleep">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <annotation name="org.gtk.GDBus.Since" value="0.9.2"/>
+      <arg name="policykit_interactivity" type="b" direction="in">
+        <doc:doc>
+          <doc:summary>policykit_interactivity determines whether PolicyKit (if enabled) should interactively ask the user for authentication credentials if it needs to.</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method initiates a request to hybrid sleep (suspend + hibernate) the computer system.</doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_INHIBITED, CK_MANAGER_ERROR_INSUFFICIENT_PERMISSION, CK_MANAGER_ERROR_AUTHORIZATION_REQUIRED,
+          CK_MANAGER_ERROR_GENERAL, CK_MANAGER_ERROR_BUSY</doc:para>
+          <doc:para>Since 0.9.2</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="CanHybridSleep">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <annotation name="org.gtk.GDBus.Since" value="0.9.1"/>
+      <arg name="can_hybridsleep" type="s" direction="out"/>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method emulates the logind implementation.</doc:para>
+          <doc:para>Returns whether the system supports hybrid sleep (suspend + hibernate) and whether the calling user is eligible to hybrid sleep the system.</doc:para>
+          <doc:para>Returns one of "na", "yes", "no" or "challenge".</doc:para>
+          <doc:para>If "na" is returned hybrid sleeping is not available because of hardware support.</doc:para>
+          <doc:para>If "yes" is returned hybrid sleeping is supported and the user may hybrid sleep without further authentication.</doc:para>
+          <doc:para>If "no" is returned hybrid sleeping is available but the user is not allowed to hybrid sleep.</doc:para>
+          <doc:para>If "challenge" is returned hybrid sleeping is available, but only after authorization.</doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_FAILED if polkit is used and fails checking authorization.</doc:para>
+          <doc:para>Since 0.9.1</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="Inhibit">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <annotation name="org.gtk.GDBus.Since" value="0.9.0"/>
+      <annotation name="org.gtk.GDBus.C.UnixFD" value="4"/>
+      <arg name="what" type="s" direction="in">
+        <doc:doc>
+          <doc:summary>What is a colon-separated list of lock types. The list of lock types are: shutdown, sleep, idle, handle-power-key, handle-suspend-key, handle-hibernate-key. Example: "shutdown:idle"</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="who"  type="s" direction="in">
+        <doc:doc>
+          <doc:summary>Who is a human-readable, descriptive string of who is taking the lock. Example: "Xfburn"</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="why"  type="s" direction="in">
+        <doc:doc>
+          <doc:summary>Why is a human-readable, descriptive string of why the program is taking the lock. Example: "Burning a DVD, interrupting now will ruin the DVD."</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="mode"  type="s" direction="in">
+        <doc:doc>
+          <doc:summary>Mode is either "block" or "delay" which determines if the inhibit lock is mandatory or should just delay the operation to a certain maximum time.</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="fd"   type="h" direction="out">
+        <doc:doc>
+            <doc:summary>Returns a file descriptor that encapsulates the lock, or -1 on failure. As soon as the file descriptor is closed (and all its duplicates) the lock is automatically released. If the client dies while the lock is taken it is automatically closed and the lock is released.</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+        <doc:para>Inhibit locks are named pipes used by ConsoleKit2 to prevent the system from performing actions such as suspending, restarting, or going idle. There are various reasons and application would like to prevent one or more of these functions such as a movie player preventing the screen saving from activating or a package manager ensuring an application installs before allowing the computer to shutdown.</doc:para>
+        <doc:para>Note: Each application can have only one lock open at any given time. Multiple applications can hold locks to the same thing, for example a media player application and a cd burning application can both prevent the system from being marked idle.</doc:para>
+        <doc:para>May fail with: CK_MANAGER_ERROR_INVALID_INPUT, CK_MANAGER_ERROR_OOM, CK_MANAGER_ERROR_GENERAL</doc:para>
+        <doc:para>Since 0.9.0</doc:para>
+        <doc:para>See this simple example:
+          <doc:example language="c" title="simple example"><doc:code>
+    DBusConnection *bus_connection;
+    DBusMessage *message = NULL, *reply = NULL;
+    DBusError error;
+    gint fd = -1;
+    const char *what = "shutdown:sleep";
+    const char *who = "Xfburn";
+    const char *why = "Burning a DVD, interrupting now will ruin the DVD.";
+    const char *mode = "block";
+
+    message = dbus_message_new_method_call ("org.freedesktop.ConsoleKit",
+                                            "/org/freedesktop/ConsoleKit/Manager",
+                                            "org.freedesktop.ConsoleKit.Manager",
+                                            "Inhibit");
+
+    if (!message)
+    {
+        g_warning ("Unable to call Inhibit()");
+        return fd;
+    }
+
+    if (!dbus_message_append_args (message,
+                                   DBUS_TYPE_STRING, &amp;what,
+                                   DBUS_TYPE_STRING, &amp;who,
+                                   DBUS_TYPE_STRING, &amp;why,
+                                   DBUS_TYPE_STRING, &amp;mode,
+                                   DBUS_TYPE_INVALID))
+    {
+        g_warning ("Unable to call Inhibit()");
+        dbus_message_unref (message);
+        return fd;
+    }
+
+    reply = dbus_connection_send_with_reply_and_block (bus_connection, message, -1, &amp;error);
+    if (!reply)
+    {
+        g_warning ("Unable to inhibit: %s", error.message);
+        dbus_message_unref (message);
+        return fd;
+    }
+
+    if (!dbus_message_get_args (reply, &amp;error,
+                                DBUS_TYPE_UNIX_FD, &amp;fd,
+                                DBUS_TYPE_INVALID))
+    {
+        g_warning ("Inhibit() reply parsing failed: %s", error.message);
+    }
+
+    dbus_message_unref (message);
+    dbus_message_unref (reply);
+    dbus_error_free (&amp;error);
+    return fd;
+          </doc:code></doc:example></doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="ActivateSession">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <arg name="session_id" direction="in" type="s">
+        <doc:doc>
+          <doc:summary>The session to activate</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method is used to activate the specified session.</doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_INVALID_INPUT, CK_MANAGER_ERROR_NO_SEATS, CK_MANAGER_ERROR_GENERAL</doc:para>
+          <doc:para>Since 1.2.0</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="ActivateSessionOnSeat">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <arg name="session_id" direction="in" type="s">
+        <doc:doc>
+          <doc:summary>The session to activate</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="seat_id" direction="in" type="s">
+        <doc:doc>
+          <doc:summary>The seat to activate the session on</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method is used to activate the specified session as
+          as long as it's on the seat_id.</doc:para>
+          <doc:para>May fail with: CK_MANAGER_ERROR_INVALID_INPUT, CK_MANAGER_ERROR_GENERAL</doc:para>
+          <doc:para>Since 1.2.0</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="LockSession">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <arg name="session_id" direction="in" type="s">
+        <doc:doc>
+          <doc:summary>The session to lock</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This will cause a <doc:ref type="signal" to="Session::Lock">Lock</doc:ref>
+          signal to be emitted for this session.
+          </doc:para>
+        </doc:description>
+        <doc:permission>This method is restricted to privileged users by D-Bus policy.</doc:permission>
+        <doc:seealso><doc:ref type="signal" to="Session::Lock">Lock signal</doc:ref></doc:seealso>
+      </doc:doc>
+    </method>
+
+    <method name="UnlockSession">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <arg name="session_id" direction="in" type="s">
+        <doc:doc>
+          <doc:summary>The session to unlock</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This will cause an <doc:ref type="signal" to="Session::Unlock">Unlock</doc:ref>
+          signal to be emitted for this session.
+          </doc:para>
+          <doc:para>This can be used by login managers to unlock a session before it is
+          re-activated during fast-user-switching.
+          </doc:para>
+        </doc:description>
+        <doc:permission>This method is restricted to privileged users by D-Bus policy.</doc:permission>
+        <doc:seealso><doc:ref type="signal" to="Session::Unlock">Unlock signal</doc:ref></doc:seealso>
+      </doc:doc>
+    </method>
+
+    <signal name="SeatNew">
+      <arg name="session_id" type="s">
+        <doc:doc>
+          <doc:summary>The Seat ID for the added seat</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="object_path" type="o">
+        <doc:doc>
+          <doc:summary>The object path for the added seat</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Emitted when a Seat has been added to the system.
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </signal>
+    <signal name="SeatRemoved">
+      <arg name="session_id" type="s">
+        <doc:doc>
+          <doc:summary>The Seat ID for the removed seat</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="object_path" type="o">
+        <doc:doc>
+          <doc:summary>The object path for the removed seat</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Emitted when a Seat has been removed from the system.
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </signal>
+    <signal name="SessionNew">
+      <arg name="session_id" type="s">
+        <doc:doc>
+          <doc:summary>The Session ID for the added session</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="object_path" type="o">
+        <doc:doc>
+          <doc:summary>The object path for the added session</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Emitted when a session has been added to the system.
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </signal>
+    <signal name="SessionRemoved">
+      <arg name="session_id" type="s">
+        <doc:doc>
+          <doc:summary>The Session ID for the removed session</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="object_path" type="o">
+        <doc:doc>
+          <doc:summary>The object path for the removed session</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Emitted when a session has been removed from the system.
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </signal>
+    <signal name="PrepareForShutdown">
+      <arg name="active" type="b">
+        <doc:doc>
+          <doc:summary>TRUE when the system is starting to halt.</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Emitted when the system is halting (active = TRUE). If
+                    successful there will not be a FALSE signal emitted since
+                    the system will poweroff or reboot. It will emit a FALSE
+                    signal if the shutdown operation failed.
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </signal>
+    <signal name="PrepareForSleep">
+      <arg name="active" type="b">
+        <doc:doc>
+          <doc:summary>TRUE when starting to sleep.</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Emitted when the system is starting the sleep process.
+                    It will emit with an active = FALSE when resuming from sleep
+                    or if the sleep operation failed.
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </signal>
+  </interface>
+</node>

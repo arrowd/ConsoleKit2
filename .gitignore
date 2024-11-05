@@ -69,6 +69,12 @@ src/ck-seat-generated.c
 src/ck-seat-generated.h
 src/ck-session-generated.c
 src/ck-session-generated.h
+src/sd-manager-generated.c
+src/sd-manager-generated.h
+src/sd-seat-generated.c
+src/sd-seat-generated.h
+src/sd-session-generated.c
+src/sd-session-generated.h
 src/test-session
 src/test-seat
 src/test-session-leader

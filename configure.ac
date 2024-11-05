@@ -478,6 +478,18 @@ if test "x$enable_rbac_shutdown" != "xno"; then
 fi
 AC_SUBST(RBAC_LIBS)
 
+dnl ---------------------------------------------------------------------------
+dnl check if to enable SystemD login1 compatibility
+dnl ---------------------------------------------------------------------------
+
+AC_ARG_ENABLE(sd-login1-compat,
+	[AS_HELP_STRING([--enable-sd-login1-compat=yes],[Make ConsoleKit also advertise itself as org.freedesktop.login1 service])],
+	enable_sd_login1_compat=$enableval,enable_sd_login1_compat=no)
+if test "x$enable_sd_login1_compat" != "xno"; then
+	AC_DEFINE(ENABLE_SD_LOGIN1, [], [Set if we build with systemd login1 compatibility])
+fi
+AM_CONDITIONAL([ENABLE_SD_LOGIN1], [test ["x$enable_sd_login1_compat" != "xno"]])
+
 #
 # Enable Tests
 #
@@ -637,6 +649,7 @@ echo "        PolicyKit support         no"
 fi
 
 echo "        RBAC (Solaris) support:   ${msg_rbac_shutdown}"
+echo "        systemd login1 compat:    ${enable_sd_login1_compat}"
 
 if test x"$POLKIT_FOUND" != x"yes" -a x${msg_rbac_shutdown} = xno; then
    echo "WARNING: PolicyKit and RBAC are disabled. You need to manually edit the ConsoleKit.conf"

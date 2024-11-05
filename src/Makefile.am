@@ -129,6 +129,12 @@ BUILT_SOURCES = 		\
 	ck-seat-generated.c	\
 	ck-session-generated.h	\
 	ck-session-generated.c	\
+	sd-manager-generated.c	\
+	sd-manager-generated.h	\
+	sd-seat-generated.c	\
+	sd-seat-generated.h	\
+	sd-session-generated.h	\
+	sd-session-generated.c	\
 	ck-marshal.c 		\
 	ck-marshal.h		\
 	$(NULL)
@@ -138,6 +144,9 @@ dbusif_DATA = 					\
 	org.freedesktop.ConsoleKit.Manager.xml	\
 	org.freedesktop.ConsoleKit.Seat.xml	\
 	org.freedesktop.ConsoleKit.Session.xml	\
+	org.freedesktop.login1.Manager.xml	\
+	org.freedesktop.login1.Seat.xml	\
+	org.freedesktop.login1.Session.xml	\
 	$(NULL)
 
 ck-manager-generated.c ck-manager-generated.h : org.freedesktop.ConsoleKit.Manager.xml Makefile.am
@@ -160,6 +169,27 @@ ck-session-generated.c ck-session-generated.h : org.freedesktop.ConsoleKit.Sessi
 		--interface-prefix=org.freedesktop.ConsoleKit. \
 		--generate-c-code=ck-session-generated \
 		$(srcdir)/org.freedesktop.ConsoleKit.Session.xml
+
+sd-manager-generated.c sd-manager-generated.h : org.freedesktop.login1.Manager.xml Makefile.am
+	gdbus-codegen \
+		--c-namespace=LoginD \
+		--interface-prefix=org.freedesktop.login1. \
+		--generate-c-code=sd-manager-generated \
+		$(srcdir)/org.freedesktop.login1.Manager.xml
+
+sd-seat-generated.c sd-seat-generated.h : org.freedesktop.login1.Seat.xml Makefile.am
+	gdbus-codegen \
+		--c-namespace=LoginD \
+		--interface-prefix=org.freedesktop.login1. \
+		--generate-c-code=sd-seat-generated \
+		$(srcdir)/org.freedesktop.login1.Seat.xml
+
+sd-session-generated.c sd-session-generated.h : org.freedesktop.login1.Session.xml Makefile.am
+	gdbus-codegen \
+		--c-namespace=LoginD \
+		--interface-prefix=org.freedesktop.login1. \
+		--generate-c-code=sd-session-generated \
+		$(srcdir)/org.freedesktop.login1.Session.xml
 
 ck-marshal.c: ck-marshal.list
 	echo "#include \"ck-marshal.h\"" > $@ && \
