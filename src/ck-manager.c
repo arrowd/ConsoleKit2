@@ -125,6 +125,7 @@ struct CkManagerPrivate
 };
 
 static void     ck_manager_iface_init  (ConsoleKitManagerIface *iface);
+static void     sd_manager_iface_init  (LoginDManagerIface *iface);
 static void     ck_manager_finalize    (GObject                *object);
 
 static void     remove_sessions_for_connection (CkManager   *manager,
@@ -137,7 +138,16 @@ static CkSession* get_session_from_id          (CkManager   *manager,
 
 static gpointer manager_object = NULL;
 
-G_DEFINE_TYPE_WITH_CODE (CkManager, ck_manager, CONSOLE_KIT_TYPE_MANAGER_SKELETON, G_IMPLEMENT_INTERFACE (CONSOLE_KIT_TYPE_MANAGER, ck_manager_iface_init));
+#ifdef ENABLE_SD_LOGIN1
+G_DEFINE_TYPE_WITH_CODE (CkManager, ck_manager, CONSOLE_KIT_TYPE_MANAGER_SKELETON,
+                         G_IMPLEMENT_INTERFACE (CONSOLE_KIT_TYPE_MANAGER, ck_manager_iface_init)
+                         G_IMPLEMENT_INTERFACE (LOGIN_D_TYPE_MANAGER, sd_manager_iface_init));
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (LoginDManager, g_object_unref)
+#else
+G_DEFINE_TYPE_WITH_CODE (CkManager, ck_manager, CONSOLE_KIT_TYPE_MANAGER_SKELETON,
+                         G_IMPLEMENT_INTERFACE (CONSOLE_KIT_TYPE_MANAGER, ck_manager_iface_init));
+#endif
 
 static void
 dump_manager_seat_iter (char      *id,
@@ -2811,11 +2821,14 @@ open_session_for_leader (CkManager             *manager,
         g_debug ("XDG_RUNTIME_DIR is %s", runtime_dir);
         ck_session_set_runtime_dir (session, runtime_dir);
 
+        pid_t leader_pid = ck_session_leader_get_pid (leader);
+        ck_session_set_leader_pid (session, leader_pid);
+
         /* If supported, add the session leader to a process group so we
          * can track it with something better than an environment variable */
         pgroup = ck_process_group_get ();
         ck_process_group_create (pgroup,
-                                 ck_session_leader_get_pid (leader),
+                                 leader_pid,
                                  ssid,
                                  unix_user);
 
@@ -3597,6 +3610,23 @@ register_manager (CkManager *manager, GDBusConnection *connection)
 
         g_debug ("exported on %s", g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (CONSOLE_KIT_MANAGER (manager))));
 
+#ifdef ENABLE_SD_LOGIN1
+        g_autoptr(LoginDManager) temp_skeleton = login_d_manager_skeleton_new ();
+        if (!g_dbus_connection_register_object (manager->priv->connection,
+                                                SD_MANAGER_DBUS_PATH,
+                                                login_d_manager_interface_info (),
+                                                LOGIN_D_MANAGER_SKELETON_GET_CLASS (temp_skeleton)->parent_class.get_vtable (NULL),
+                                                NULL,
+                                                NULL,
+                                                &error)) {
+                if (error != NULL) {
+                        g_critical ("error exporting interface: %s", error->message);
+                        g_error_free (error);
+                        return FALSE;
+                }
+        }
+#endif
+
         /* connect to DBus for get_caller_info */
         manager->priv->bus_proxy = g_dbus_proxy_new_sync (manager->priv->connection,
                                                           G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES |
@@ -3911,6 +3941,13 @@ dbus_list_sessions (ConsoleKitManager     *ckmanager,
 
         console_kit_manager_complete_list_sessions (ckmanager, context, g_variant_builder_end (&session_builder));
         return TRUE;
+}
+
+static gboolean
+dbus_list_users (LoginDManager         *sdmanager,
+                 GDBusMethodInvocation *context)
+{
+        login_d_manager_complete_list_users (sdmanager, context, NULL);
 }
 
 static gboolean
@@ -4277,4 +4314,38 @@ ck_manager_iface_init (ConsoleKitManagerIface *iface)
         iface->handle_activate_session_on_seat     = dbus_activate_session_on_seat;
         iface->handle_lock_session                 = dbus_lock_session;
         iface->handle_unlock_session               = dbus_unlock_session;
+}
+
+static void
+sd_manager_iface_init (LoginDManagerIface *iface)
+{
+        iface->handle_get_session                  = (gpointer)dbus_get_session;
+        iface->handle_get_session_by_pid           = (gpointer)dbus_get_session_by_pid;
+        iface->handle_get_user                     = NULL;
+        iface->handle_get_user_by_pid              = NULL;
+        iface->handle_get_seat                     = NULL;
+        iface->handle_list_sessions                = (gpointer)dbus_list_sessions;
+        iface->handle_list_sessions_ex             = NULL;
+        iface->handle_list_users                   = NULL;
+        iface->handle_list_seats                   = (gpointer)dbus_list_seats;
+        iface->handle_list_inhibitors              = (gpointer)dbus_list_inhibitors;
+        iface->handle_restart                      = (gpointer)dbus_restart;
+        iface->handle_can_restart                  = (gpointer)dbus_can_restart;
+        iface->handle_halt                         = (gpointer)dbus_stop;
+        iface->handle_can_halt                     = (gpointer)dbus_can_stop;
+        iface->handle_reboot                       = (gpointer)dbus_reboot;
+        iface->handle_can_reboot                   = (gpointer)dbus_can_reboot;
+        iface->handle_power_off                    = (gpointer)dbus_power_off;
+        iface->handle_can_power_off                = (gpointer)dbus_can_power_off;
+        iface->handle_suspend                      = (gpointer)dbus_suspend;
+        iface->handle_can_suspend                  = (gpointer)dbus_can_suspend;
+        iface->handle_hibernate                    = (gpointer)dbus_hibernate;
+        iface->handle_can_hibernate                = (gpointer)dbus_can_hibernate;
+        iface->handle_hybrid_sleep                 = (gpointer)dbus_hybrid_sleep;
+        iface->handle_can_hybrid_sleep             = (gpointer)dbus_can_hybrid_sleep;
+        iface->handle_inhibit                      = (gpointer)dbus_inhibit;
+        iface->handle_activate_session             = (gpointer)dbus_activate_session;
+        iface->handle_activate_session_on_seat     = (gpointer)dbus_activate_session_on_seat;
+        iface->handle_lock_session                 = (gpointer)dbus_lock_session;
+        iface->handle_unlock_session               = (gpointer)dbus_unlock_session;
 }

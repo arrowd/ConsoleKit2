@@ -24,6 +24,7 @@
 
 #include <glib-object.h>
 #include "ck-manager-generated.h"
+#include "sd-manager-generated.h"
 
 #include "ck-seat.h"
 
@@ -32,6 +33,12 @@
 #define CK_MANAGER_DBUS_PATH   CK_DBUS_PATH "/Manager"
 #define DBUS_SESSION_INTERFACE DBUS_NAME ".Session"
 #define DBUS_MANAGER_INTERFACE DBUS_NAME ".Manager"
+
+#define SD_DBUS_NAME              "org.freedesktop.login1"
+#define SD_DBUS_PATH           "/org/freedesktop/login1"
+#define SD_MANAGER_DBUS_PATH   SD_DBUS_PATH
+#define SD_DBUS_SESSION_INTERFACE SD_DBUS_NAME ".Session"
+#define SD_DBUS_MANAGER_INTERFACE SD_DBUS_NAME ".Manager"
 
 G_BEGIN_DECLS
 
