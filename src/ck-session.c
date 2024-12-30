@@ -79,6 +79,7 @@
 #define CK_SESSION_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), CK_TYPE_SESSION, CkSessionPrivate))
 
 #define CK_SESSION_DBUS_NAME "org.freedesktop.ConsoleKit.Session"
+#define SD_SESSION_DBUS_NAME "org.freedesktop.login1.Session"
 
 #define NONULL_STRING(x) ((x) != NULL ? (x) : "")
 
@@ -103,6 +104,7 @@ struct CkSessionPrivate
         char            *seat_path;
         char            *runtime_dir;
         char            *login_session_id;
+        pid_t            leader_pid;
 
         gchar           *session_controller;
         guint            session_controller_watchid;
@@ -135,16 +137,25 @@ enum {
         PROP_COOKIE,
         PROP_LOGIN_SESSION_ID,
         PROP_SESSION_CONTROLLER,
+        PROP_TYPE,
 };
 
 static guint signals [LAST_SIGNAL] = { 0, };
 
 static void     ck_session_iface_init           (ConsoleKitSessionIface *iface);
+static void     sd_session_iface_init           (LoginDSessionIface     *iface);
 static void     ck_session_finalize             (GObject                *object);
 static void     ck_session_remove_all_devices   (CkSession              *session);
 
+#ifdef ENABLE_SD_LOGIN1
+G_DEFINE_TYPE_WITH_CODE (CkSession, ck_session, CONSOLE_KIT_TYPE_SESSION_SKELETON,
+                         G_IMPLEMENT_INTERFACE (CONSOLE_KIT_TYPE_SESSION, ck_session_iface_init)
+                         G_IMPLEMENT_INTERFACE (LOGIN_D_TYPE_SESSION, sd_session_iface_init));
 
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (LoginDSession, g_object_unref)
+#else
 G_DEFINE_TYPE_WITH_CODE (CkSession, ck_session, CONSOLE_KIT_TYPE_SESSION_SKELETON, G_IMPLEMENT_INTERFACE (CONSOLE_KIT_TYPE_SESSION, ck_session_iface_init));
+#endif
 
 static const GDBusErrorEntry ck_session_error_entries[] =
 {
@@ -249,6 +260,25 @@ register_session (CkSession *session, GDBusConnection *connection)
         }
 
         g_debug ("exported on %s", g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (CONSOLE_KIT_SESSION (session))));
+
+#ifdef ENABLE_SD_LOGIN1
+        g_autoptr(LoginDSession) temp_skeleton = login_d_session_skeleton_new ();
+        g_autoptr(GString) login1_path = g_string_new (session->priv->path);
+        g_string_replace (login1_path, CK_DBUS_PATH, SD_DBUS_PATH, 1);
+        if (!g_dbus_connection_register_object (session->priv->connection,
+                                                login1_path->str,
+                                                login_d_session_interface_info (),
+                                                LOGIN_D_SESSION_SKELETON_GET_CLASS (temp_skeleton)->parent_class.get_vtable (NULL),
+                                                session,
+                                                NULL,
+                                                &error)) {
+                if (error != NULL) {
+                        g_critical ("error exporting interface: %s", error->message);
+                        g_error_free (error);
+                        return FALSE;
+                }
+        }
+#endif
 
         /* connect to DBus for get_caller_info */
         session->priv->bus_proxy = g_dbus_proxy_new_sync (session->priv->connection,
@@ -470,7 +500,7 @@ dbus_set_idle_hint (ConsoleKitSession     *cksession,
         uid_t       calling_uid = 0;
         pid_t       calling_pid = 0;
         gboolean    res;
-        CkSession *session;
+        CkSession  *session;
 
         TRACE ();
 
@@ -519,7 +549,7 @@ dbus_set_locked_hint (ConsoleKitSession     *cksession,
         uid_t       calling_uid = 0;
         pid_t       calling_pid = 0;
         gboolean    res;
-        CkSession *session;
+        CkSession  *session;
 
         TRACE ();
 
@@ -548,7 +578,187 @@ dbus_set_locked_hint (ConsoleKitSession     *cksession,
 
         console_kit_session_set_locked_hint (cksession, arg_locked_hint);
 
-        console_kit_session_complete_set_idle_hint (cksession, context);
+        console_kit_session_complete_set_locked_hint (cksession, context);
+        return TRUE;
+}
+
+static gboolean
+dbus_set_session_type (LoginDSession     *sdsession,
+                       GDBusMethodInvocation *context,
+                       const gchar *type)
+{
+        const char *sender;
+        uid_t       calling_uid = 0;
+        pid_t       calling_pid = 0;
+        gboolean    res;
+        CkSession  *session;
+
+        TRACE ();
+
+        g_return_val_if_fail (CK_IS_SESSION (sdsession), FALSE);
+
+        session = CK_SESSION(sdsession);
+
+        sender = g_dbus_method_invocation_get_sender (context);
+
+        res = get_caller_info (session,
+                               sender,
+                               &calling_uid,
+                               &calling_pid);
+
+        if (! res) {
+                g_warning ("stat on pid %d failed", calling_pid);
+                throw_error (context, CK_SESSION_ERROR_FAILED, _("Unable to lookup information about calling process '%d'"), calling_pid);
+                return TRUE;
+        }
+
+        /* only restrict this by UID for now */
+        if (console_kit_session_get_unix_user (CONSOLE_KIT_SESSION (session)) != calling_uid) {
+                throw_error (context, CK_SESSION_ERROR_INSUFFICIENT_PERMISSION, _("Only session owner may set session type"));
+                return TRUE;
+        }
+
+        console_kit_session_set_session_type (CONSOLE_KIT_SESSION (session), type);
+
+        login_d_session_complete_set_type (sdsession, context);
+
+        return TRUE;
+}
+
+static gboolean
+dbus_set_session_class (LoginDSession     *sdsession,
+                        GDBusMethodInvocation *context,
+                        const gchar *klass)
+{
+        const char *sender;
+        uid_t       calling_uid = 0;
+        pid_t       calling_pid = 0;
+        gboolean    res;
+        CkSession  *session;
+
+        TRACE ();
+
+        g_return_val_if_fail (CK_IS_SESSION (sdsession), FALSE);
+
+        session = CK_SESSION(sdsession);
+
+        sender = g_dbus_method_invocation_get_sender (context);
+
+        res = get_caller_info (session,
+                               sender,
+                               &calling_uid,
+                               &calling_pid);
+
+        if (! res) {
+                g_warning ("stat on pid %d failed", calling_pid);
+                throw_error (context, CK_SESSION_ERROR_FAILED, _("Unable to lookup information about calling process '%d'"), calling_pid);
+                return TRUE;
+        }
+
+        /* only restrict this by UID for now */
+        if (console_kit_session_get_unix_user (CONSOLE_KIT_SESSION (session)) != calling_uid) {
+                throw_error (context, CK_SESSION_ERROR_INSUFFICIENT_PERMISSION, _("Only session owner may set session class"));
+                return TRUE;
+        }
+
+        console_kit_session_set_session_class (CONSOLE_KIT_SESSION (session), klass);
+
+        login_d_session_complete_set_class (sdsession, context);
+
+        return TRUE;
+}
+
+static gboolean
+dbus_set_display (LoginDSession     *sdsession,
+                  GDBusMethodInvocation *context,
+                  const gchar *display)
+{
+        const char *sender;
+        uid_t       calling_uid = 0;
+        pid_t       calling_pid = 0;
+        gboolean    res;
+        CkSession  *session;
+
+        TRACE ();
+
+        g_return_val_if_fail (CK_IS_SESSION (sdsession), FALSE);
+
+        session = CK_SESSION(sdsession);
+
+        sender = g_dbus_method_invocation_get_sender (context);
+
+        res = get_caller_info (session,
+                               sender,
+                               &calling_uid,
+                               &calling_pid);
+
+        if (! res) {
+                g_warning ("stat on pid %d failed", calling_pid);
+                throw_error (context, CK_SESSION_ERROR_FAILED, _("Unable to lookup information about calling process '%d'"), calling_pid);
+                return TRUE;
+        }
+
+        /* only restrict this by UID for now */
+        if (console_kit_session_get_unix_user (CONSOLE_KIT_SESSION (session)) != calling_uid) {
+                throw_error (context, CK_SESSION_ERROR_INSUFFICIENT_PERMISSION, _("Only session owner may set session display"));
+                return TRUE;
+        }
+
+        console_kit_session_set_x11_display (CONSOLE_KIT_SESSION (session), display);
+
+        login_d_session_complete_set_display (sdsession, context);
+
+        return TRUE;
+}
+
+static gboolean
+dbus_set_tty (LoginDSession     *sdsession,
+              GDBusMethodInvocation *context,
+              GVariant *tty)
+{
+        const char *sender;
+        uid_t       calling_uid = 0;
+        pid_t       calling_pid = 0;
+        gboolean    res;
+        CkSession  *session;
+        GError     *error;
+        GUnixFDList*fd_list = g_dbus_message_get_unix_fd_list (g_dbus_method_invocation_get_message (context));
+
+        TRACE ();
+
+        g_return_val_if_fail (CK_IS_SESSION (sdsession), FALSE);
+
+        session = CK_SESSION(sdsession);
+
+        sender = g_dbus_method_invocation_get_sender (context);
+
+        res = get_caller_info (session,
+                               sender,
+                               &calling_uid,
+                               &calling_pid);
+
+        if (! res) {
+                g_warning ("stat on pid %d failed", calling_pid);
+                throw_error (context, CK_SESSION_ERROR_FAILED, _("Unable to lookup information about calling process '%d'"), calling_pid);
+                return TRUE;
+        }
+
+        /* only restrict this by UID for now */
+        if (console_kit_session_get_unix_user (CONSOLE_KIT_SESSION (session)) != calling_uid) {
+                throw_error (context, CK_SESSION_ERROR_INSUFFICIENT_PERMISSION, _("Only session owner may set session class"));
+                return TRUE;
+        }
+
+        int fd = g_unix_fd_list_get (fd_list, g_variant_get_handle (tty), &error);
+        if (error != NULL) {
+                g_critical ("error getting system bus: %s", error->message);
+                g_error_free (error);
+        } else {
+                session->priv->tty_fd = fd;
+        }
+
+        login_d_session_complete_set_tty (sdsession, context);
+
         return TRUE;
 }
 
@@ -901,6 +1111,33 @@ dbus_is_active (ConsoleKitSession     *cksession,
 {
         TRACE ();
         console_kit_session_complete_is_active (cksession, context, console_kit_session_get_active (cksession));
+        return TRUE;
+}
+
+static gboolean
+dbus_terminate (LoginDSession         *sdsession,
+                GDBusMethodInvocation *context)
+{
+        CkSession *session = CK_SESSION (sdsession);
+        kill (session->priv->leader_pid, SIGTERM);
+        login_d_session_complete_terminate (sdsession, context);
+        return TRUE;
+}
+
+static gboolean
+dbus_kill (LoginDSession         *sdsession,
+           GDBusMethodInvocation *context,
+           const gchar           *who,
+           gint                   signal)
+{
+        CkSession *session = CK_SESSION (sdsession);
+        if (g_strcmp0 (who, "leader")) {
+                kill (session->priv->leader_pid, signal);
+        } else if (g_strcmp0 (who, "all")) {
+                // TODO: implement this in a proper way
+                kill (session->priv->leader_pid, signal);
+        }
+        login_d_session_complete_kill (sdsession, context);
         return TRUE;
 }
 
@@ -1681,6 +1918,28 @@ ck_session_set_session_controller (CkSession   *session,
         }
 }
 
+gboolean
+ck_session_set_leader_pid (CkSession *session,
+                           pid_t      pid)
+{
+        g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
+
+        session->priv->leader_pid = pid;
+
+        return TRUE;
+}
+
+gboolean
+ck_session_set_type (CkSession      *session,
+                     const gchar    *type)
+{
+        g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
+
+        console_kit_session_set_session_type (CONSOLE_KIT_SESSION (session), type);
+
+        return TRUE;
+}
+
 static gboolean
 dbus_can_control_session (ConsoleKitSession *object,
                           GDBusMethodInvocation *invocation)
@@ -1972,6 +2231,9 @@ ck_session_set_property (GObject            *object,
         case PROP_SESSION_CONTROLLER:
                 ck_session_set_session_controller (self, g_value_get_string (value));
                 break;
+        case PROP_TYPE:
+                ck_session_set_type (self, g_value_get_string (value));
+                break;
         default:
                 G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
                 break;
@@ -2000,6 +2262,9 @@ ck_session_get_property (GObject    *object,
                 break;
         case PROP_SESSION_CONTROLLER:
                 g_value_set_string (value, self->priv->session_controller);
+                break;
+        case PROP_TYPE:
+                g_value_set_string (value, console_kit_session_get_session_type (CONSOLE_KIT_SESSION (object)));
                 break;
         default:
                 G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -2137,6 +2402,15 @@ ck_session_class_init (CkSessionClass *klass)
                                                               NULL,
                                                               G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 
+        /* Install properties that should've been provided by the logid skeleton */
+        g_object_class_install_property (object_class,
+                                         PROP_TYPE,
+                                         g_param_spec_string ("type",
+                                                              "type",
+                                                              "type",
+                                                              NULL,
+                                                              G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
+
         g_type_class_add_private (klass, sizeof (CkSessionPrivate));
 }
 
@@ -2185,6 +2459,29 @@ ck_session_iface_init (ConsoleKitSessionIface *iface)
         iface->handle_take_device            = dbus_take_device;
         iface->handle_release_device         = dbus_release_device;
         iface->handle_pause_device_complete  = dbus_pause_device_complete;
+}
+
+static void
+sd_session_iface_init (LoginDSessionIface *iface)
+{
+        iface->handle_terminate              = dbus_terminate;
+        iface->handle_activate               = (gpointer)dbus_activate;
+        iface->handle_lock                   = (gpointer)dbus_lock;
+        iface->handle_unlock                 = (gpointer)dbus_unlock;
+        iface->handle_kill                   = dbus_kill;
+        iface->handle_take_control           = (gpointer)dbus_take_control;
+        iface->handle_release_control        = (gpointer)dbus_release_control;
+        iface->handle_release_control        = (gpointer)dbus_release_control;
+        iface->handle_set_idle_hint          = (gpointer)dbus_set_idle_hint;
+        iface->handle_set_locked_hint        = (gpointer)dbus_set_locked_hint;
+        iface->handle_set_type               = dbus_set_session_type;
+        iface->handle_set_class              = dbus_set_session_class;
+        iface->handle_set_display            = dbus_set_display;
+        iface->handle_set_tty                = dbus_set_tty;
+        iface->handle_take_device            = (gpointer)dbus_take_device;
+        iface->handle_release_device         = (gpointer)dbus_release_device;
+        iface->handle_pause_device_complete  = (gpointer)dbus_pause_device_complete;
+        iface->handle_set_brightness         = NULL;
 }
 
 static void

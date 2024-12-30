@@ -24,6 +24,7 @@
 
 #include <glib-object.h>
 #include "ck-session-generated.h"
+#include "sd-session-generated.h"
 
 G_BEGIN_DECLS
 
@@ -107,6 +108,8 @@ gboolean            ck_session_set_session_type       (CkSession             *se
                                                        GError               **error);
 void                ck_session_set_session_controller (CkSession             *session,
                                                        const gchar           *bus_name);
+gboolean            ck_session_set_leader_pid         (CkSession             *session,
+                                                       pid_t                  pid);
 
 /* Authoritative properties */
 gboolean            ck_session_get_id                 (CkSession             *session,
