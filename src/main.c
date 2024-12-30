@@ -42,7 +42,7 @@
 #include "ck-log.h"
 
 #define CK_DBUS_NAME "org.freedesktop.ConsoleKit"
-
+#define SD_DBUS_NAME "org.freedesktop.login1"
 
 static GMainLoop *loop = NULL;
 
@@ -77,7 +77,7 @@ name_acquired (GDBusConnection *connection,
                const gchar *name,
                gpointer user_data)
 {
-        g_debug ("name_acquired\n");
+        g_debug ("name_acquired: %s\n", name);
 }
 
 static void
@@ -222,7 +222,7 @@ main (int    argc,
         GError          *error;
         int              ret;
         gboolean         res;
-        guint            id;
+        guint            id, sd_id;
         static gboolean     debug            = FALSE;
         static gboolean     no_daemon        = FALSE;
         static gboolean     do_timed_exit    = FALSE;
@@ -235,7 +235,7 @@ main (int    argc,
 
         /* Setup for i18n */
         setlocale(LC_ALL, "");
- 
+
 #ifdef ENABLE_NLS
         bindtextdomain(PACKAGE, LOCALEDIR);
         textdomain(PACKAGE);
@@ -295,6 +295,13 @@ main (int    argc,
                              G_BUS_NAME_OWNER_FLAGS_NONE,
                              bus_acquired, name_acquired, name_lost,
                              NULL, NULL);
+#ifdef ENABLE_SD_LOGIN1
+        sd_id = g_bus_own_name (G_BUS_TYPE_SYSTEM,
+                                SD_DBUS_NAME,
+                                G_BUS_NAME_OWNER_FLAGS_NONE,
+                                NULL, name_acquired, name_lost,
+                                NULL, NULL);
+#endif
 
         create_pid_file ();
 
@@ -307,6 +314,9 @@ main (int    argc,
         g_main_loop_run (loop);
 
         g_bus_unown_name (id);
+#ifdef ENABLE_SD_LOGIN1
+        g_bus_unown_name (sd_id);
+#endif
 
         g_main_loop_unref (loop);
 
