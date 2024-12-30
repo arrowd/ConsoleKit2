@@ -25,6 +25,7 @@
 
 #include "ck-session.h"
 #include "ck-seat-generated.h"
+#include "sd-seat-generated.h"
 
 G_BEGIN_DECLS
 

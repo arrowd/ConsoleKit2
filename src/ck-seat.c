@@ -44,6 +44,7 @@
 #define CK_SEAT_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), CK_TYPE_SEAT, CkSeatPrivate))
 
 #define CK_SEAT_DBUS_NAME "org.freedesktop.ConsoleKit.Seat"
+#define SD_SEAT_DBUS_NAME "org.freedesktop.login1.Seat"
 
 #define NONULL_STRING(x) ((x) != NULL ? (x) : "")
 
@@ -72,17 +73,35 @@ enum {
 
 enum {
         PROP_0,
-        PROP_ID,
+        PROP_SID,
         PROP_KIND,
         PROP_CONNECTION,
+        /* login1 */
+        PROP_ID,
+        PROP_ACTIVE_SESSION,
+        PROP_CAN_TTY,
+        PROP_CAN_GRAPHICAL,
+        PROP_SESSIONS,
+        PROP_IDLE_HINT,
+        PROP_IDLE_SINCE_HINT,
+        PROP_IDLE_SINCE_HINT_MONOTONIC
 };
 
 static guint signals [LAST_SIGNAL] = { 0, };
 
 static void     ck_seat_finalize    (GObject     *object);
 static void     ck_seat_iface_init  (ConsoleKitSeatIface *iface);
+static void     sd_seat_iface_init  (LoginDSeatIface *iface);
 
+#ifdef ENABLE_SD_LOGIN1
+G_DEFINE_TYPE_WITH_CODE (CkSeat, ck_seat, CONSOLE_KIT_TYPE_SEAT_SKELETON,
+                         G_IMPLEMENT_INTERFACE (CONSOLE_KIT_TYPE_SEAT, ck_seat_iface_init)
+                         G_IMPLEMENT_INTERFACE (LOGIN_D_TYPE_SEAT, sd_seat_iface_init));
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (LoginDSeat, g_object_unref)
+#else
 G_DEFINE_TYPE_WITH_CODE (CkSeat, ck_seat, CONSOLE_KIT_TYPE_SEAT_SKELETON, G_IMPLEMENT_INTERFACE (CONSOLE_KIT_TYPE_SEAT, ck_seat_iface_init));
+#endif
 
 static const GDBusErrorEntry ck_seat_error_entries[] =
 {
@@ -995,7 +1014,25 @@ ck_seat_register (CkSeat *seat)
                 }
         }
 
-        console_kit_seat_set_can_graphical (ckseat, ck_seat_can_graphical ());
+#ifdef ENABLE_SD_LOGIN1
+        g_autoptr(LoginDSeat) temp_skeleton = login_d_seat_skeleton_new ();
+        g_autoptr(GString) login1_path = g_string_new (seat->priv->path);
+        g_string_replace (login1_path, CK_DBUS_PATH, SD_DBUS_PATH, 1);
+        gpointer vtable = LOGIN_D_SEAT_SKELETON_GET_CLASS (temp_skeleton)->parent_class.get_vtable (NULL);
+        if (!g_dbus_connection_register_object (seat->priv->connection,
+                                                login1_path->str,
+                                                login_d_seat_interface_info (),
+                                                LOGIN_D_SEAT_SKELETON_GET_CLASS (temp_skeleton)->parent_class.get_vtable (NULL),
+                                                seat,
+                                                NULL,
+                                                &error)) {
+                if (error != NULL) {
+                        g_critical ("error exporting interface: %s", error->message);
+                        g_error_free (error);
+                        return FALSE;
+                }
+        }
+#endif
 
         g_debug ("exported on %s", g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (ckseat)));
 
@@ -1149,6 +1186,7 @@ ck_seat_set_property (GObject            *object,
         self = CK_SEAT (object);
 
         switch (prop_id) {
+        case PROP_SID:
         case PROP_ID:
                 _ck_seat_set_id (self, g_value_get_string (value));
                 break;
@@ -1167,6 +1205,13 @@ ck_seat_set_property (GObject            *object,
 }
 
 static void
+fill_sessions (gpointer key, gpointer data, GVariantBuilder* builder)
+{
+        CkSession* session = CK_SESSION (data);
+        g_variant_builder_add (builder, "(so)", key, ck_session_get_path (session));
+}
+
+static void
 ck_seat_get_property (GObject    *object,
                       guint       prop_id,
                       GValue     *value,
@@ -1177,6 +1222,7 @@ ck_seat_get_property (GObject    *object,
         self = CK_SEAT (object);
 
         switch (prop_id) {
+        case PROP_SID:
         case PROP_ID:
                 g_value_set_string (value, self->priv->id);
                 break;
@@ -1186,6 +1232,40 @@ ck_seat_get_property (GObject    *object,
         case PROP_CONNECTION:
                 g_value_set_pointer (value, self->priv->connection);
                 break;
+        case PROP_ACTIVE_SESSION:
+        {
+                CkSession* active_session = self->priv->active_session;
+                if (!active_session)
+                        break;
+
+                GVariantBuilder builder;
+                gchar *sid;
+                ck_session_get_seat_id ( active_session, &sid, NULL );
+
+                g_variant_builder_init (&builder, G_VARIANT_TYPE ("(so)"));
+                g_variant_builder_add (&builder, "s", sid);
+                g_variant_builder_add (&builder, "o", ck_session_get_path (active_session));
+                g_value_set_variant(value, g_variant_builder_end(&builder));
+                break;
+        }
+        case PROP_CAN_TTY:
+        case PROP_CAN_GRAPHICAL:
+                g_value_set_boolean (value, TRUE);
+                break;
+        case PROP_SESSIONS:
+        {
+                GVariantBuilder builder;
+                g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(so)"));
+                g_hash_table_foreach (self->priv->sessions, (GHFunc)fill_sessions, NULL);
+                g_value_set_variant(value, g_variant_builder_end(&builder));
+                break;
+        }
+        case PROP_IDLE_HINT:
+                g_value_set_boolean (value, self->priv->active_session != NULL);
+                break;
+        case PROP_IDLE_SINCE_HINT:
+        case PROP_IDLE_SINCE_HINT_MONOTONIC:
+                g_value_set_uint64 (value, 0);
         default:
                 G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
                 break;
@@ -1253,10 +1333,10 @@ ck_seat_class_init (CkSeatClass *klass)
                                                   1, CK_TYPE_SESSION);
 
         g_object_class_install_property (object_class,
-                                         PROP_ID,
-                                         g_param_spec_string ("id",
-                                                              "id",
-                                                              "id",
+                                         PROP_SID,
+                                         g_param_spec_string ("sid",
+                                                              "sid",
+                                                              "sid",
                                                               NULL,
                                                               G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
         g_object_class_install_property (object_class,
@@ -1274,6 +1354,71 @@ ck_seat_class_init (CkSeatClass *klass)
                                                                "gdbus-connection",
                                                                "gdbus-connection",
                                                                G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
+
+        /* Install properties that should've been provided by the logid skeleton */
+
+        g_object_class_install_property (object_class,
+                                         PROP_ID,
+                                         g_param_spec_string ("id",
+                                                              "id",
+                                                              "id",
+                                                              NULL,
+                                                              G_PARAM_READWRITE));
+        g_object_class_install_property (object_class,
+                                         PROP_ACTIVE_SESSION,
+                                         g_param_spec_variant ("active-session",
+                                                               "active-session",
+                                                               "active-session",
+                                                               G_VARIANT_TYPE ("(so)"),
+                                                               NULL,
+                                                               G_PARAM_READWRITE));
+        g_object_class_install_property (object_class,
+                                         PROP_CAN_TTY,
+                                         g_param_spec_boolean ("can-tty",
+                                                               "can-tty",
+                                                               "can-tty",
+                                                               TRUE,
+                                                               G_PARAM_READWRITE));
+        g_object_class_install_property (object_class,
+                                         PROP_CAN_GRAPHICAL,
+                                         g_param_spec_boolean ("can-graphical",
+                                                               "can-graphical",
+                                                               "can-graphical",
+                                                               TRUE,
+                                                               G_PARAM_READWRITE));
+        g_object_class_install_property (object_class,
+                                         PROP_SESSIONS,
+                                         g_param_spec_variant ("sessions",
+                                                               "sessions",
+                                                               "sessions",
+                                                               G_VARIANT_TYPE ("a(so)"),
+                                                               NULL,
+                                                               G_PARAM_READWRITE));
+        g_object_class_install_property (object_class,
+                                         PROP_IDLE_HINT,
+                                         g_param_spec_boolean ("idle-hint",
+                                                               "idle-hint",
+                                                               "idle-hint",
+                                                               FALSE,
+                                                               G_PARAM_READWRITE));
+        g_object_class_install_property (object_class,
+                                         PROP_IDLE_SINCE_HINT,
+                                         g_param_spec_uint64 ("idle-since-hint",
+                                                               "idle-since-hint",
+                                                               "idle-since-hint",
+                                                               0,
+                                                               G_MAXUINT64,
+                                                               0,
+                                                               G_PARAM_READWRITE));
+        g_object_class_install_property (object_class,
+                                         PROP_IDLE_SINCE_HINT_MONOTONIC,
+                                         g_param_spec_uint64 ("idle-since-hint-monotonic",
+                                                               "idle-since-hint-monotonic",
+                                                               "idle-since-hint-monotonic",
+                                                               0,
+                                                               G_MAXUINT64,
+                                                               0,
+                                                               G_PARAM_READWRITE));
 
         g_type_class_add_private (klass, sizeof (CkSeatPrivate));
 }
@@ -1331,6 +1476,16 @@ ck_seat_iface_init (ConsoleKitSeatIface *iface)
         iface->handle_switch_to             = dbus_switch_to;
 }
 
+static void
+sd_seat_iface_init (LoginDSeatIface *iface)
+{
+        iface->handle_terminate             = NULL;
+        iface->handle_activate_session      = (gpointer)dbus_activate_session;
+        iface->handle_switch_to             = (gpointer)dbus_switch_to;
+        iface->handle_switch_to_next        = NULL;
+        iface->handle_switch_to_previous    = NULL;
+}
+
 CkSeat *
 ck_seat_new (const char      *sid,
              CkSeatKind       kind,
@@ -1339,7 +1494,7 @@ ck_seat_new (const char      *sid,
         GObject *object;
 
         object = g_object_new (CK_TYPE_SEAT,
-                               "id", sid,
+                               "sid", sid,
                                "kind", kind,
                                "gdbus-connection", connection,
                                NULL);
@@ -1357,7 +1512,7 @@ ck_seat_new_with_devices (const char            *sid,
         guint    i;
 
         object = g_object_new (CK_TYPE_SEAT,
-                               "id", sid,
+                               "sid", sid,
                                "kind", kind,
                                "gdbus-connection", connection,
                                NULL);
